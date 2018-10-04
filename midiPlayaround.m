@@ -1,9 +1,11 @@
-%Next step is to differentiate between an off and an on MIDI message.
-%Should be easily defineable using the 128 144 code messages. Probs want to
-%add any note on message to the top of the matrix whilst storing the note
+%Probs want to add any note on message to the top of the matrix whilst storing the note
 %off message above any other note off message but never replacing a note
 %on...effectively producing history of the note of messages, only if there
 %is space
+
+%Next step is to add a sound output/work out how that would happen. After
+%this the process will need to be split up into defined functions I do
+%believe. MIDI data receival should be the first command in a MAIN loop.
 
 %Initialisations
 onOffMessages = [];
@@ -26,24 +28,42 @@ while etime(clock, t0) < 60 %run loop for a whole minute
     msgs = midireceive(midiInput);
     
     if length(msgs) ~= 0
-        for i = 1:length(msgs)   
-        %Get midi byte from input.
-        midiMessage = msgs(i).MsgBytes;
-        onOffMessages(end+1) = midiMessage(1);
-        noteNoMessages(end+1) = midiMessage(2);
-        velocityMessages(end+1) = midiMessage(3);
-        latestMIDIMessage = [midiMessage(1) midiMessage(2) midiMessage(3)];
+        for noteMessage = 1:length(msgs)  
+            %Get midi byte from input.
+            midiMessage = msgs(noteMessage).MsgBytes;
 
-        %Shifts all notes along in the storage matrix 
-            if latestMIDIMessage ~= [0 0 0] %checks midimessage has been received
-                for j = length(myMatrix):-1:1 %iterate backwards through values
+            onOffMessages(end+1) = midiMessage(1);
+            noteNoMessages(end+1) = midiMessage(2);
+            velocityMessages(end+1) = midiMessage(3);
+            latestMIDIMessage = [midiMessage(1) midiMessage(2) midiMessage(3)];
+
+            %Shifts all notes along in the storage matrix 
+            if latestMIDIMessage(1) == 144 %checks midimessage has been received and is a note on
+                for i = length(myMatrix):-1:1 %iterate backwards through values
                     %Shift every stored note down a row in the matrix
-                    if myMatrix(j,2:4) ~= [0 0 0] & j < length(myMatrix)
-                        myMatrix(j+1,2:4) = myMatrix(j,2:4);
+                    if myMatrix(i,2:4) ~= [0 0 0] & i < length(myMatrix)
+                        myMatrix(i+1,2:4) = myMatrix(i,2:4);
                     end
                 end            
                 %Inserts the new midi message into the first row of the matrix.
                 myMatrix(1,2:4) = latestMIDIMessage;
+                latestMIDIMessage = [0 0 0];
+            end
+            
+            %If a note OFF message is received, remove the corresponding
+            %note from the matrix and shift every other note up a row in
+            %the matrix.
+            if latestMIDIMessage(1) == 128 %checks midimessage has been received and is a note off
+                for i = 1:length(myMatrix)
+                    if latestMIDIMessage(2) == myMatrix(i,3)
+                        myMatrix(10,2:4) = [0 0 0];
+                        for j = i:length(myMatrix) 
+                            if j < length(myMatrix)
+                                myMatrix(j,2:4) = myMatrix(j+1,2:4); %This process of shifting every note up or down one place should be made into a callable function.
+                            end
+                        end
+                    end    
+                end    
                 latestMIDIMessage = [0 0 0];
             end
 
