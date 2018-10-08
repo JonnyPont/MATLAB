@@ -12,6 +12,15 @@ onOffMessages = [];
 noteNoMessages = [];
 velocityMessages = [];
 
+%Define oscillator
+osc = audioOscillator('sawtooth', 'Amplitude', 0);
+deviceWriter = audioDeviceWriter;
+deviceWriter.SupportVariableSizeInput = true;
+deviceWriter.BufferSize = 64; % small buffer keeps MIDI latency low
+
+freqA = 440;
+noteA = 69;
+
 %Arpeggiator matrix storage
 myMatrix = zeros(10,4);
 myMatrix(:,1) = linspace(1,10,10);
@@ -69,6 +78,13 @@ while etime(clock, t0) < 60 %run loop for a whole minute
 
         end
         myMatrix
+        for i = 1:length(myMatrix)
+            if myMatrix(i,2) == 144
+                freq = freqA * 2.^((myMatrix(i,3)-noteA)/12);
+                osc.Frequency = freq;
+                osc.Amplitude = 1;            
+            end    
+        end    
     end
 end
 
