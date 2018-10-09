@@ -1,11 +1,4 @@
-%Probs want to add any note on message to the top of the matrix whilst storing the note
-%off message above any other note off message but never replacing a note
-%on...effectively producing history of the note of messages, only if there
-%is space
-
-%Next step is to add a sound output/work out how that would happen. After
-%this the process will need to be split up into defined functions I do
-%believe. MIDI data receival should be the first command in a MAIN loop.
+%Need to write a line of code that listens for new messages.
 
 %Initialisations
 onOffMessages = [];
@@ -35,9 +28,8 @@ midiInput = mididevice('LPK25');
 t0 = clock;
 
 while true
-    
-    msgs = midireceive(midiInput);
-        
+
+    msgs = midireceive(midiInput);    
     for i = 1:length(arpeggios)
         %Send notes to the oscillator
         if arpeggios(i,2) == 144
@@ -52,60 +44,120 @@ while true
         end
     end
     
+    %If a message is received then
     if isempty(msgs) ~= 1
+        %For each message received
         for noteMessage = 1:length(msgs)
-            %Get midi byte from input.
+            
+            %Get midi byte from input
             midiMessage = msgs(noteMessage).MsgBytes;
+            latestMidiMessage = [midiMessage(1) midiMessage(2) midiMessage(3)];
             
-%             onOffMessages(end+1) = midiMessage(1);
-%             noteNoMessages(end+1) = midiMessage(2);
-%             velocityMessages(end+1) = midiMessage(3);
-            latestMIDIMessage = [midiMessage(1) midiMessage(2) midiMessage(3)];
             
-            %Shifts all notes along in the storage matrix
-            if latestMIDIMessage(1) == 144 %checks midimessage has been received and is a note on
-                for i = length(midiNotes):-1:1 %iterate backwards through values
-                    %Shift every stored note down a row in the matrix
-                    if midiNotes(i,3) ~= 0 && i < length(midiNotes)
-                        midiNotes(i+1,2:4) = midiNotes(i,2:4);
-                    end
-                end
-                %Inserts the new midi message into the first row of the matrix.
-                midiNotes(1,2:4) = latestMIDIMessage;
-                latestMIDIMessage = [0 0 0];
+            %Add any noteOn message notes to the note table
+            if latestMidiMessage(1) == 144 %checks midimessage has been received and is a note on
+                midiNotes = addNote(latestMidiMessage,midiNotes);
+                latestMidiMessage = [0 0 0];
             end
+
             
-            %If a note OFF message is received, remove the corresponding
-            %note from the matrix and shift every other note up a row in
-            %the matrix.
-            if latestMIDIMessage(1) == 128 %checks midimessage has been received and is a note off
-                for i = 1:length(midiNotes)
-                    if latestMIDIMessage(2) == midiNotes(i,3)
-                        midiNotes(10,2:4) = [0 0 0];
-                        for j = i:length(midiNotes)
-                            if j < length(midiNotes)
-                                midiNotes(j,2:4) = midiNotes(j+1,2:4); %This process of shifting every note up or down one place should be made into a callable function.
-                            end
-                        end
-                    end
-                end
-                latestMIDIMessage = [0 0 0];
+            %Remove any noteOff message notes from the note table
+            if latestMidiMessage(1) == 128 %checks midimessage is a note off
+                midiNotes = removeNote(latestMidiMessage,midiNotes);
+                latestMidiMessage = [0 0 0];
             end 
+
         end
+    
+        %Down Arpeggiator
+        arpeggios = downArp(midiNotes)
         
-%         %     Down Arpeggiator
-%         arpeggios = sortrows(midiNotes,3,'descend');  
-%         arpeggios(:,1) = linspace(1,10,10);
-%         arpeggios
-        
-        %     %Up Arpeggiator
-        arpeggios = sortrows(midiNotes,3);
-        arpeggios(:,1) = linspace(1,10,10);
-        arpeggios
+        % Up arpeggiator
+%         arpeggios = upArp(midiNotes)
+
         %Up Down Arpeggiator
     end
 end
 
+
+function outputNoteTable = downArp(inputNoteTable)
+%Sort notes for up arpeggiator
+    outputNoteTable = sortrows(inputNoteTable,3,'descend');
+    outputNoteTable(:,1) = linspace(1,10,10);
+end
+
+
+
+function outputNoteTable = upArp(inputNoteTable)
+%Sort notes for up arpeggiator
+    outputNoteTable = sortrows(inputNoteTable,3);
+    outputNoteTable(:,1) = linspace(1,10,10);
+end
+
+
+
+function outputNoteTable = removeNote(latestMidiMessage,inputNoteTable)
+%Remove the note in the corresponding noteOff message from the note table
+
+for i = 1:length(inputNoteTable)
+    if latestMidiMessage(2) == inputNoteTable(i,3)
+        inputNoteTable(10,2:4) = [0 0 0];
+        for j = i:length(inputNoteTable)
+            if j < length(inputNoteTable)
+                inputNoteTable(j,2:4) = inputNoteTable(j+1,2:4); %This process of shifting every note up or down one place should be made into a callable function.
+            end
+        end
+    end
+end
+
+outputNoteTable = inputNoteTable;
+
+end
+
+
+
+function outputNoteTable = addNote(latestMidiMessage,inputNoteTable)
+%Add note from the corresponding noteOn message to the note table
+
+for i = length(inputNoteTable):-1:1 %iterate backwards through values
+    %Shift every stored note down a row in the matrix
+    if inputNoteTable(i,3) ~= 0 && i < length(inputNoteTable)
+        inputNoteTable(i+1,2:4) = inputNoteTable(i,2:4);
+    end
+end
+%Inserts the new midi message into the first row of the matrix.
+inputNoteTable(1,2:4) = latestMidiMessage;
+outputNoteTable = inputNoteTable;
+end
+
+
+% % This function will not work but I'm trying to think along these lines.
+% function deviceWriter = playSound(inputNoteTable)
+% %Output sound
+% 
+% for i = 1:length(inputNoteTable)
+%     %Send notes to the oscillator
+%     if inputNoteTable(i,2) == 144
+%         freq = freqA * 2.^((inputNoteTable(i,3)-noteA)/12);
+%         osc.Frequency = freq;
+%         osc.Amplitude = 1;
+%         while etime(clock, t0) < 0.15 %run loop for 0.15s
+%             deviceWriter(osc());
+%         end
+%         pause(0.1);
+%         t0 = clock;
+%     end
+% end
+% 
+% end
+
+
 % This updates the following row with the previous row's entries.
 % current = 1;
 % myMatrix(current+1,2:4) = myMatrix(current,2:4);
+
+% Pursuing this idea for storing all data that is processed could be a good
+% idea in the long run so to keep a log of work.
+%             onOffMessages(end+1) = midiMessage(1);
+%             noteNoMessages(end+1) = midiMessage(2);
+%             velocityMessages(end+1) = midiMessage(3);
